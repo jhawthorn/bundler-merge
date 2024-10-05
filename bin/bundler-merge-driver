@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+
+# [merge "bundler"]
+#   name = Gemfile.lock merge driver
+#   driver = bundler-merge-driver %O %A %B
+
+if ARGV.size != 3
+  puts "Usage: #$0 %O %A %B"
+  exit 1
+end
+
+p ARGV
+puts "hello, world"
+
