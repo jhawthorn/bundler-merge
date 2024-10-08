@@ -1,8 +1,8 @@
 require "minitest/autorun"
 
-class TestBundlerMergeDriver < Minitest::Test
+class TestBundlerMerge < Minitest::Test
   FIXTURES = File.expand_path("fixtures", __dir__)
-  BIN = File.expand_path("../bin/bundler-merge-driver", __dir__)
+  BIN = File.expand_path("../bin/bundler-merge", __dir__)
 
   def test_example_test
     result = run_merge(

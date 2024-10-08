@@ -2,7 +2,7 @@
 
 # [merge "bundler"]
 #   name = Gemfile.lock merge driver
-#   driver = bundler-merge-driver %O %A %B
+#   driver = bundler-merge %O %A %B
 
 # Known sections:
 # * GIT
