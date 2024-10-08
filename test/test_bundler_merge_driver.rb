@@ -8,21 +8,21 @@ class TestBundlerMergeDriver < Minitest::Test
     p BIN
 
     result = run_merge(
-      "rack_and_rack_test/Gemfile.lock.orig",
       "rack_and_rack_test/Gemfile.lock.rack",
+      "rack_and_rack_test/Gemfile.lock.orig",
       "rack_and_rack_test/Gemfile.lock.rack-test",
     )
   end
 
   Result = Struct.new(:status, :stdout, :merged)
 
-  def run_merge(base, local, remote)
+  def run_merge(local, base, remote)
     Dir.mktmpdir do |tmpdir|
-      FileUtils.cp("#{FIXTURES}/#{base}", "#{tmpdir}/base")
       FileUtils.cp("#{FIXTURES}/#{local}", "#{tmpdir}/local")
+      FileUtils.cp("#{FIXTURES}/#{base}", "#{tmpdir}/base")
       FileUtils.cp("#{FIXTURES}/#{remote}", "#{tmpdir}/remote")
 
-      argv = ["#{tmpdir}/base", "#{tmpdir}/local", "#{tmpdir}/remote"]
+      argv = ["#{tmpdir}/local", "#{tmpdir}/base", "#{tmpdir}/remote"]
       #stdout = IO.popen([RbConfig.ruby, BIN, "", :err=>[:child, :out]]) do |io|
       stdout = IO.popen([RbConfig.ruby, BIN, *argv]) do |io|
         io.read

@@ -5,10 +5,129 @@
 #   driver = bundler-merge-driver %O %A %B
 
 if ARGV.size != 3
-  puts "Usage: #$0 %O %A %B"
+  puts "Usage: #$0 %A %O %B"
   exit 1
 end
 
-p ARGV
-puts "hello, world"
+# Known sections:
+# * GIT
+# * PATH
+# * GEM
+# * PLATFORMS
+# * DEPENDENCIES
+# * BUNDLED WITH
+# * RUBY VERSION
+
+Section = Struct.new(:name, :text) do
+  def key
+    case name
+    when "GIT", "PATH", "GEM"
+      remote = text[/^  remote: (.+)$/, 1] || fail("remote missing")
+      "#{name}:#{remote}"
+    else
+      name
+    end
+  end
+end
+
+class Lockfile
+  attr_reader :sections, :path
+  def initialize(path)
+    @path = path
+    @sections = []
+    section = nil
+    File.foreach(path) do |line|
+      if line == "\n"
+        section = nil
+      elsif line =~ /\A[A-Z]/
+        name = line.chomp
+        section = Section.new(name, line.dup)
+        @sections << section
+      else
+        section.text << line
+      end
+    end
+  end
+
+  def section(name)
+    sections = sections.select {|s| s.name == name }
+    raise "duplicate section #{name.dump}" if sections.size > 1
+    sections[0]
+  end
+end
+
+Dependency = Struct.new(:text) do
+  def key
+  end
+end
+
+class Diff3
+  Chunk = Struct.new(:o, :a, :b) do
+    alias_method :original, :o
+  end
+
+
+  def initialize(o, a, b)
+    @chunks = Hash.new { |h, k| h[k] = Chunk.new }
+    o.each { |s| @chunks[key(s)].o = s }
+    a.each { |s| @chunks[key(s)].a = s }
+    b.each { |s| @chunks[key(s)].b = s }
+  end
+
+  def key(v)
+    raise NotImplementedError
+  end
+
+  def result
+    results = @chunks.values.map do |chunk|
+      if chunk.original == chunk.a
+        # only changed by B
+        chunk.b
+      elsif chunk.original == chunk.b
+        # only changed by A
+        chunk.a
+      elsif chunk.a == chunk.b
+        # both changed in same way
+        chunk.a
+      else
+        # Ah dang it's a real merge
+        merge(chunk)
+      end
+    end
+  end
+end
+
+class LockfileDiff3 < Diff3
+  def key(section)
+    section.key
+  end
+
+  def merge(section)
+    fail("conflict") unless section.o
+
+    name = section.o.name
+
+    if false
+    elsif name == "DEPENDENCIES"
+      # Ah dang it's a real merge
+      o, a, b = [section.o, section.a, section.b].map do |s|
+        s.text.lines[1..]
+      end
+      # FIXME!
+      section.a
+    elsif name == "GEM"
+      # Ah dang it's a real merge
+      # FIXME!
+      section.a
+    else
+      fail("unimplemented")
+    end
+  end
+end
+
+local, base, remote = ARGV.map { Lockfile.new(_1) }
+#pp base.sections.map(&:name)
+
+diff3 = LockfileDiff3.new(*[base, local, remote].map(&:sections))
+puts diff3.result.map(&:text).join("\n")
 
