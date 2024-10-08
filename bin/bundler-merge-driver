@@ -4,11 +4,6 @@
 #   name = Gemfile.lock merge driver
 #   driver = bundler-merge-driver %O %A %B
 
-if ARGV.size != 3
-  puts "Usage: #$0 %A %O %B"
-  exit 1
-end
-
 # Known sections:
 # * GIT
 # * PATH
@@ -27,6 +22,10 @@ Section = Struct.new(:name, :text) do
     else
       name
     end
+  end
+
+  def self.build(name, internal)
+    new(name, "#{name}\n#{internal}")
   end
 end
 
@@ -48,24 +47,12 @@ class Lockfile
       end
     end
   end
-
-  def section(name)
-    sections = sections.select {|s| s.name == name }
-    raise "duplicate section #{name.dump}" if sections.size > 1
-    sections[0]
-  end
-end
-
-Dependency = Struct.new(:text) do
-  def key
-  end
 end
 
 class Diff3
   Chunk = Struct.new(:o, :a, :b) do
     alias_method :original, :o
   end
-
 
   def initialize(o, a, b)
     @chunks = Hash.new { |h, k| h[k] = Chunk.new }
@@ -74,14 +61,18 @@ class Diff3
     b.each { |s| @chunks[key(s)].b = s }
   end
 
-  def key(v)
-    raise NotImplementedError
+  def key(x)
+    x
+  end
+
+  def merge(x)
+    fail("conflict")
   end
 
   def result
-    results = @chunks.values.map do |chunk|
+    @chunks.values.map do |chunk|
       if chunk.original == chunk.a
-        # only changed by B
+        # only changed by B (or no change at all)
         chunk.b
       elsif chunk.original == chunk.b
         # only changed by A
@@ -97,37 +88,62 @@ class Diff3
   end
 end
 
+class DependencyDiff3 < Diff3
+  def key(dep)
+    dep[/  ([^ !]+)/, 1]
+  end
+end
+
+class GemDiff3 < Diff3
+  def key(dep)
+    dep[/    ([^ !]+)/, 1]
+  end
+end
+
 class LockfileDiff3 < Diff3
   def key(section)
     section.key
   end
 
-  def merge(section)
-    fail("conflict") unless section.o
+  def merge(chunk)
+    fail("conflict") unless chunk.o
 
-    name = section.o.name
+    name = chunk.o.name
 
     if false
     elsif name == "DEPENDENCIES"
-      # Ah dang it's a real merge
-      o, a, b = [section.o, section.a, section.b].map do |s|
+      diff3 = DependencyDiff3.new(*chunk.to_a.map do |s|
         s.text.lines[1..]
-      end
-      # FIXME!
-      section.a
+      end)
+      Section.build(name, diff3.result.join)
     elsif name == "GEM"
-      # Ah dang it's a real merge
-      # FIXME!
-      section.a
+      gems = chunk.to_a.map do |s|
+        specs = s.text[/^  specs:\n((:?    .+\n)*)/, 1]
+        specs = specs.split(/^(?=    [^ ])/)
+      end
+      diff3 = GemDiff3.new(*gems)
+      prefix = chunk.o.text[/\A.+\n  specs:\n/m]
+      text = "#{prefix}#{diff3.result.join}"
+      Section.new(name, text)
+    elsif name == "BUNDLED WITH"
+      # Just take ours
+      chunk.a
     else
       fail("unimplemented")
     end
   end
 end
 
-local, base, remote = ARGV.map { Lockfile.new(_1) }
-#pp base.sections.map(&:name)
+argv = ARGV.dup
+stdout = !!argv.delete("-p")
 
-diff3 = LockfileDiff3.new(*[base, local, remote].map(&:sections))
-puts diff3.result.map(&:text).join("\n")
+if argv.size != 3
+  puts "Usage: #$0 %A %O %B"
+  exit 1
+end
 
+local, base, remote = files = argv
+diff3 = LockfileDiff3.new(*[base, local, remote].map { |f| Lockfile.new(f).sections })
+result = diff3.result.map(&:text).join("\n")
+output = stdout ? STDOUT : File.open(local, "w")
+output.puts result
