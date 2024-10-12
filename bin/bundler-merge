@@ -52,6 +52,18 @@ end
 class Diff3
   Chunk = Struct.new(:o, :a, :b) do
     alias_method :original, :o
+
+    def replace(regex)
+      texts = to_a
+      texts = texts.map(&:text) unless String === texts[0]
+      matches = texts.map { |s| s.match(regex) }
+      return nil unless matches.map{|m| [m.pre_match, m.post_match] }.uniq.size == 1
+      extracted = matches.map { |m| m.match(1) }
+      result = yield extracted
+      text = texts[0].dup
+      text[*matches[0].offset(1)] = result
+      text
+    end
   end
 
   def initialize(o, a, b)
@@ -66,7 +78,7 @@ class Diff3
   end
 
   def merge(x)
-    fail("conflict")
+    fail("conflict: #{x.inspect}")
   end
 
   def result
@@ -100,6 +112,26 @@ class GemDiff3 < Diff3
   end
 end
 
+class SubdepDiff3 < Diff3
+  def key(dep)
+    dep[/      ([^ !]+)/, 1]
+  end
+end
+
+# Like GemDiff3 but also allow merging dependencies
+class PathDiff3 < Diff3
+  def key(dep)
+    dep[/    ([^ !]+)/, 1]
+  end
+
+  def merge(chunk)
+    chunk.replace(/\A    [^\n]+\n(.+)\z/m) do |deps|
+      result = SubdepDiff3.new(*deps.map(&:lines)).result
+      result.sort.join("")
+    end
+  end
+end
+
 class LockfileDiff3 < Diff3
   def key(section)
     section.key
@@ -118,7 +150,7 @@ class LockfileDiff3 < Diff3
       Section.build(name, diff3.result.join)
     elsif name == "GEM"
       gems = chunk.to_a.map do |s|
-        specs = s.text[/^  specs:\n((:?    .+\n)*)/, 1]
+        specs = s.text[/^  specs:\n((?:    .+\n)*)/, 1]
         specs = specs.split(/^(?=    [^ ])/)
       end
       diff3 = GemDiff3.new(*gems)
@@ -128,8 +160,17 @@ class LockfileDiff3 < Diff3
     elsif name == "BUNDLED WITH"
       # Just take ours
       chunk.a
+    elsif name == "PATH"
+      text = chunk.replace(/^  specs:\n((?:    .+\n)*)/) do |s|
+        gems = s.map do |specs|
+          specs.split(/^(?=    [^ ])/)
+        end
+        diff3 = PathDiff3.new(*gems)
+        diff3.result.join("")
+      end
+      Section.new(name, text)
     else
-      fail("unimplemented")
+      fail("merge unimplemented for #{name.inspect}")
     end
   end
 end
