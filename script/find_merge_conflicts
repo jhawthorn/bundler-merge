@@ -1,0 +1,54 @@
+#!/usr/bin/env ruby
+# Run me in a git repo with a Gemfile.lock
+
+require "tmpdir"
+
+revisions = `git rev-list --parents HEAD -- Gemfile.lock`.lines(chomp: true)
+revisions.map! { |x| x.split(" ") }
+revisions.reject! { |x| x.size != 3 } # only merges between two branches please
+
+def read_lockfile(sha)
+  output = `git cat-file --textconv #{sha}:Gemfile.lock`
+  return nil unless $?.success?
+  output
+end
+
+destination = File.expand_path("../test/fixtures/rails/", __dir__)
+
+revisions.each do |(merge, a, b)|
+  base = `git merge-base #{a} #{b}`.strip
+  next if base.empty?
+
+  base_file = read_lockfile(base)
+  a_file = read_lockfile(a)
+  b_file = read_lockfile(b)
+  merge_file = read_lockfile(merge)
+
+  next unless base_file && a_file && b_file
+
+  auto_merge = nil
+  success = nil
+  Dir.mktmpdir do |tmpdir|
+    File.write("#{tmpdir}/base", base_file)
+    File.write("#{tmpdir}/a", a_file)
+    File.write("#{tmpdir}/b", b_file)
+    auto_merge = `git merge-file -p #{tmpdir}/a #{tmpdir}/base #{tmpdir}/b`
+    success = $?.success?
+    #puts auto_merge
+  end
+
+  if !success
+    dir = "#{destination}/#{merge[0,8]}"
+    FileUtils.mkdir_p(dir)
+    File.write("#{dir}/base", base_file)
+    File.write("#{dir}/a", a_file)
+    File.write("#{dir}/b", b_file)
+    File.write("#{dir}/merge", merge_file)
+    File.write("#{dir}/conflict", auto_merge)
+  end
+
+  #p [success, !auto_merge.include?("<<<")]
+
+  #base_file, merge_file, a_file, b_file = [base, merge]
+end
+
