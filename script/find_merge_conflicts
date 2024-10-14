@@ -37,15 +37,13 @@ revisions.each do |(merge, a, b)|
     #puts auto_merge
   end
 
-  if !success
-    dir = "#{destination}/#{merge[0,8]}"
-    FileUtils.mkdir_p(dir)
-    File.write("#{dir}/base", base_file)
-    File.write("#{dir}/a", a_file)
-    File.write("#{dir}/b", b_file)
-    File.write("#{dir}/merge", merge_file)
-    File.write("#{dir}/conflict", auto_merge)
-  end
+  dir = "#{destination}/#{merge[0,8]}"
+  FileUtils.mkdir_p(dir)
+  File.write("#{dir}/base", base_file)
+  File.write("#{dir}/a", a_file)
+  File.write("#{dir}/b", b_file)
+  File.write("#{dir}/merge", merge_file)
+  File.write("#{dir}/conflict", auto_merge)
 
   #p [success, !auto_merge.include?("<<<")]
 
