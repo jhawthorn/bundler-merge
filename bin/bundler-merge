@@ -24,6 +24,11 @@ Section = Struct.new(:name, :text) do
     end
   end
 
+  SECTION_ORDER = %W[GIT PATH GEM PLATFORMS DEPENDENCIES BUNDLED\ WITH RUBY\ VERSION]
+  def sort_key
+    [SECTION_ORDER.index(name), text[/^  remote: (.+)$/, 1]]
+  end
+
   def self.build(name, internal)
     new(name, "#{name}\n#{internal}")
   end
@@ -96,7 +101,7 @@ class Diff3
         # Ah dang it's a real merge
         merge(chunk)
       end
-    end
+    end.compact
   end
 end
 
@@ -108,7 +113,7 @@ end
 
 class GemDiff3 < Diff3
   def key(dep)
-    dep[/    ([^ !]+)/, 1]
+    dep.match(/    ([^ !]+) \([0-9a-z\.]+(-[a-z0-9\-]*)?\)/i).captures
   end
 end
 
@@ -125,6 +130,7 @@ class PathDiff3 < Diff3
   end
 
   def merge(chunk)
+    super unless chunk.all?
     chunk.replace(/\A    [^\n]+\n(.+)\z/m) do |deps|
       result = SubdepDiff3.new(*deps.map(&:lines)).result
       result.sort.join("")
@@ -147,7 +153,7 @@ class LockfileDiff3 < Diff3
       diff3 = DependencyDiff3.new(*chunk.to_a.map do |s|
         s.text.lines[1..]
       end)
-      Section.build(name, diff3.result.join)
+      Section.build(name, diff3.result.sort.join)
     elsif name == "GEM"
       gems = chunk.to_a.map do |s|
         specs = s.text[/^  specs:\n((?:    .+\n)*)/, 1]
@@ -155,7 +161,7 @@ class LockfileDiff3 < Diff3
       end
       diff3 = GemDiff3.new(*gems)
       prefix = chunk.o.text[/\A.+\n  specs:\n/m]
-      text = "#{prefix}#{diff3.result.join}"
+      text = "#{prefix}#{diff3.result.sort.join}"
       Section.new(name, text)
     elsif name == "BUNDLED WITH"
       # Just take ours
@@ -185,6 +191,6 @@ end
 
 local, base, remote = files = argv
 diff3 = LockfileDiff3.new(*[base, local, remote].map { |f| Lockfile.new(f).sections })
-result = diff3.result.map(&:text).join("\n")
+result = diff3.result.sort_by(&:sort_key).map(&:text).join("\n")
 output = stdout ? STDOUT : File.open(local, "w")
 output.puts result
