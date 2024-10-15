@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = "bundler-merge"
-  spec.version = "0.1.0"
+  spec.version = "0.1.1"
   spec.authors = ["John Hawthorn"]
   spec.email = ["john@hawthorn.email"]
 
