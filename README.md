@@ -1,3 +1,5 @@
+# bundler-merge
+
 ## Strategy
 
 The goal of this project is to increase the number of Gemfile.lock merges which can be resolved automatically. This does not mean never encountering a merge conflict.
