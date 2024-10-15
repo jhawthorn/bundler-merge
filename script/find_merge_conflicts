@@ -2,6 +2,16 @@
 # Run me in a git repo with a Gemfile.lock
 
 require "tmpdir"
+require 'optparse'
+
+destination = nil
+OptionParser.new do |opts|
+  opts.banner = "Usage: #$0 [options]"
+
+  opts.on("-o", "--output DIR", "Directory to import into") do |o|
+    destination = o
+  end
+end.parse!
 
 revisions = `git rev-list --parents HEAD -- Gemfile.lock`.lines(chomp: true)
 revisions.map! { |x| x.split(" ") }
@@ -12,8 +22,6 @@ def read_lockfile(sha)
   return nil unless $?.success?
   output
 end
-
-destination = File.expand_path("../test/fixtures/rails/", __dir__)
 
 revisions.each do |(merge, a, b)|
   base = `git merge-base #{a} #{b}`.strip
@@ -37,13 +45,15 @@ revisions.each do |(merge, a, b)|
     #puts auto_merge
   end
 
-  dir = "#{destination}/#{merge[0,8]}"
-  FileUtils.mkdir_p(dir)
-  File.write("#{dir}/base", base_file)
-  File.write("#{dir}/a", a_file)
-  File.write("#{dir}/b", b_file)
-  File.write("#{dir}/merge", merge_file)
-  File.write("#{dir}/conflict", auto_merge)
+  if destination
+    dir = "#{destination}/#{merge[0,8]}"
+    FileUtils.mkdir_p(dir)
+    File.write("#{dir}/base", base_file)
+    File.write("#{dir}/a", a_file)
+    File.write("#{dir}/b", b_file)
+    File.write("#{dir}/merge", merge_file)
+    File.write("#{dir}/conflict", auto_merge)
+  end
 
   #p [success, !auto_merge.include?("<<<")]
 
